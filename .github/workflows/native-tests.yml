@@ -1,0 +1,23 @@
+name: Native clock contract tests
+
+on:
+  push:
+    branches: ["platform_clock"]
+  pull_request:
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch ESPressio-Platform contract
+        run: git clone --depth 1 --branch platform_clock https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git .deps/ESPressio-Platform
+      - name: Compile and run
+        run: |
+          g++ -std=gnu++17 -Wall -Wextra -Werror -pedantic \
+            -Itests/fakes \
+            -Isrc \
+            -I.deps/ESPressio-Platform/src \
+            tests/native/clock_test.cpp \
+            -o clock_test
+          ./clock_test
