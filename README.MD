@@ -29,3 +29,15 @@ Capability selection is static, while native driver availability is explicit run
 Interrupt initialization uses ESP-IDF's shared ISR service. An already-installed service is treated as available, and an individual GPIO provider never uninstalls that process-global service. Interrupt handlers can then be attached/detached per pin through the generic Platform contract.
 
 As with all Platform providers, structural support is a compile-time fact while runtime driver/resource failures remain runtime results.
+
+## ByteStream
+
+`IDF::UartByteStream<Port, Tag>` adapts an already-installed ESP-IDF UART driver to the tagged Platform ByteStream contract. The adapter does not install, configure, own, or delete the UART driver, keeping baud rate, pins, ring-buffer sizing and ISR resource ownership explicit outside the generic stream abstraction.
+
+`Available()` reports the current RX ring-buffer population. `Read()` uses a zero-tick wait and therefore only consumes bytes available at call time. `Write()` delegates to `uart_write_bytes()` and reports the number of bytes accepted; its blocking behaviour remains the behaviour selected when the native UART driver was configured.
+
+## Entropy
+
+`IDF::HardwareRngEntropy` implements `Capability::Entropy` using `esp_fill_random()` and additionally advertises `Capability::HardwareRandomGenerator` to describe its hardware provenance.
+
+That feature does **not** claim a fixed entropy strength. ESP-IDF documents that continuous true-random output depends on runtime conditions such as an active RF subsystem or explicitly enabled hardware entropy source. Platform therefore leaves cryptographic-strength/entropy-bit claims out of the static provider metadata rather than overstating a runtime guarantee.

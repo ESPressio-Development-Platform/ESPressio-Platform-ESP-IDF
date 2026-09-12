@@ -24,3 +24,5 @@ using ProviderDeclaration = ESPressio::Platform::ProviderDeclaration<
 #include "ESPressio_Platform_IDFClock.hpp"
 #include "ESPressio_Platform_IDFBus.hpp"
 #include "ESPressio_Platform_IDFGPIO.hpp"
+#include "ESPressio_Platform_IDFByteStream.hpp"
+#include "ESPressio_Platform_IDFEntropy.hpp"

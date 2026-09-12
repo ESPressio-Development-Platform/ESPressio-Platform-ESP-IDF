@@ -2,7 +2,7 @@ name: Native Platform backend contract tests
 
 on:
   push:
-    branches: ["platform_bus_gpio"]
+    branches: ["platform_bytestream_entropy"]
   pull_request:
 
 jobs:
@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Fetch ESPressio-Platform contract
-        run: git clone --depth 1 --branch platform_bus_gpio https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git .deps/ESPressio-Platform
+        run: git clone --depth 1 --branch platform_bytestream_entropy https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git .deps/ESPressio-Platform
       - name: Compile and run
         run: |
           set -euo pipefail
