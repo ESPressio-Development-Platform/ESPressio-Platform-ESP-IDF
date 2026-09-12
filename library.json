@@ -27,7 +27,7 @@
   "dependencies": [
     {
       "name": "ESPressio-Platform",
-      "version": "https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git#platform_bytestream_entropy"
+      "version": "https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git#platform_sync_queue"
     }
   ]
 }
