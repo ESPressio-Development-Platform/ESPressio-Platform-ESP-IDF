@@ -1,0 +1,27 @@
+name: Native Platform backend contract tests
+
+on:
+  push:
+    branches: ["platform_sync_queue"]
+  pull_request:
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch ESPressio-Platform contract
+        run: git clone --depth 1 --branch platform_sync_queue https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git .deps/ESPressio-Platform
+      - name: Compile and run
+        run: |
+          set -euo pipefail
+          for source in tests/native/*.cpp; do
+            name="$(basename "${source}" .cpp)"
+            g++ -std=gnu++17 -Wall -Wextra -Werror -pedantic \
+              -Itests/fakes \
+              -Isrc \
+              -I.deps/ESPressio-Platform/src \
+              "${source}" \
+              -o "${name}"
+            "./${name}"
+          done
