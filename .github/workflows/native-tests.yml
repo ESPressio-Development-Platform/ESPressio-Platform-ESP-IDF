@@ -1,8 +1,8 @@
-name: Native clock contract tests
+name: Native Platform backend contract tests
 
 on:
   push:
-    branches: ["platform_clock"]
+    branches: ["platform_bus_gpio"]
   pull_request:
 
 jobs:
@@ -11,13 +11,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Fetch ESPressio-Platform contract
-        run: git clone --depth 1 --branch platform_clock https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git .deps/ESPressio-Platform
+        run: git clone --depth 1 --branch platform_bus_gpio https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git .deps/ESPressio-Platform
       - name: Compile and run
         run: |
-          g++ -std=gnu++17 -Wall -Wextra -Werror -pedantic \
-            -Itests/fakes \
-            -Isrc \
-            -I.deps/ESPressio-Platform/src \
-            tests/native/clock_test.cpp \
-            -o clock_test
-          ./clock_test
+          set -euo pipefail
+          for source in tests/native/*.cpp; do
+            name="$(basename "${source}" .cpp)"
+            g++ -std=gnu++17 -Wall -Wextra -Werror -pedantic \
+              -Itests/fakes \
+              -Isrc \
+              -I.deps/ESPressio-Platform/src \
+              "${source}" \
+              -o "${name}"
+            "./${name}"
+          done

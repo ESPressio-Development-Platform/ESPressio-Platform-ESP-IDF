@@ -27,7 +27,7 @@
   "dependencies": [
     {
       "name": "ESPressio-Platform",
-      "version": "https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git#platform_clock"
+      "version": "https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git#platform_bus_gpio"
     }
   ]
 }
