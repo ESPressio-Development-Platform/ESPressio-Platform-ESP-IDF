@@ -20,3 +20,5 @@ using ProviderDeclaration = ESPressio::Platform::ProviderDeclaration<
     TRequirements>;
 
 } // namespace ESPressio::Platform::IDF
+
+#include "ESPressio_Platform_IDFClock.hpp"
