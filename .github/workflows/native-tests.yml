@@ -22,8 +22,8 @@ jobs:
             g++ -std=gnu++17 -Wall -Wextra -Werror -pedantic \
               -Itests/fakes \
               -Isrc \
-              -I.deps/ESPressio-System/src \
               -I.deps/ESPressio-Platform/src \
+              -I.deps/ESPressio-System/src \
               "${source}" \
               -o "${name}"
             "./${name}"
