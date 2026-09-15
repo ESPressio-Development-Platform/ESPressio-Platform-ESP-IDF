@@ -2,7 +2,7 @@ name: Native Platform backend contract tests
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "ota_v1"]
   pull_request:
 
 jobs:
@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Fetch ESPressio-Platform contract
-        run: git clone --depth 1 --branch main https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git .deps/ESPressio-Platform
+        run: git clone --depth 1 --branch ota_v1 https://github.com/ESPressio-Development-Platform/ESPressio-Platform.git .deps/ESPressio-Platform
       - name: Compile and run
         run: |
           set -euo pipefail
