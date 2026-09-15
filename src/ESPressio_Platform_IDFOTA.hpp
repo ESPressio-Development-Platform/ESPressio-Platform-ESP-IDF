@@ -207,6 +207,37 @@ public:
         return state == ESP_OTA_IMG_PENDING_VERIFY;
     }
 
+    OTA::TrialBootStateResult InspectBootTargetTrialState(
+        OTA::BootTargetIdentifier target) const noexcept {
+        const auto* partition = OTADetail::FindApplicationTarget(target);
+        if (partition == nullptr) {
+            return {OTA::Status::Invalid, OTA::TrialBootState::Unknown, ESP_ERR_NOT_FOUND};
+        }
+        esp_ota_img_states_t state{};
+        const auto result = esp_ota_get_state_partition(partition, &state);
+        if (result == ESP_ERR_NOT_FOUND) {
+            return {OTA::Status::Success, OTA::TrialBootState::NeverAttempted, 0};
+        }
+        if (result != ESP_OK) {
+            const auto mapped = OTADetail::MapResult(result);
+            return {mapped.Code, OTA::TrialBootState::Unknown, mapped.NativeCode};
+        }
+        switch (state) {
+            case ESP_OTA_IMG_NEW:
+                return {OTA::Status::Success, OTA::TrialBootState::Armed, 0};
+            case ESP_OTA_IMG_PENDING_VERIFY:
+                return {OTA::Status::Success, OTA::TrialBootState::PendingValidation, 0};
+            case ESP_OTA_IMG_VALID:
+                return {OTA::Status::Success, OTA::TrialBootState::Accepted, 0};
+            case ESP_OTA_IMG_INVALID:
+            case ESP_OTA_IMG_ABORTED:
+                return {OTA::Status::Success, OTA::TrialBootState::Rejected, 0};
+            case ESP_OTA_IMG_UNDEFINED:
+                return {OTA::Status::Success, OTA::TrialBootState::Untracked, 0};
+        }
+        return {OTA::Status::Failed, OTA::TrialBootState::Unknown, ESP_ERR_INVALID_STATE};
+    }
+
     OTA::Result MarkCurrentBootValid() noexcept {
         return OTADetail::MapResult(esp_ota_mark_app_valid_cancel_rollback());
     }
@@ -293,6 +324,8 @@ static_assert(OTA::IsBootControlProviderV<OTABootControl>,
               "ESP-IDF boot control must satisfy the portable OTA contract");
 static_assert(OTA::IsTrialBootProviderV<OTATrialBoot>,
               "ESP-IDF trial boot must satisfy the portable OTA contract");
+static_assert(OTA::HasTrialBootStateInspectionV<OTATrialBoot>,
+              "ESP-IDF trial boot must expose target trial-state inspection");
 static_assert(OTA::IsSystemRestartProviderV<OTASystemRestart>,
               "ESP-IDF restart must satisfy the portable OTA contract");
 static_assert(OTA::IsStorageLayoutInspectionProviderV<OTAStorageLayoutInspection>,
