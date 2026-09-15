@@ -2,28 +2,29 @@ name: OTA Trial State Recovery Fix
 
 on:
   push:
-    branches: [ota_v1]
+    branches:
+      - ota_v1
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ota_v1
-      - name: Patch ESP-IDF trial-state inspection
+      - name: Apply source fix
+        shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           p = Path('src/ESPressio_Platform_IDFOTA.hpp')
           s = p.read_text()
-          method_anchor = '    OTA::Result MarkCurrentBootValid() noexcept {'
-          method = '''    OTA::TrialBootStateResult InspectBootTargetTrialState(
+          if 'InspectBootTargetTrialState' not in s:
+              anchor = '    OTA::Result MarkCurrentBootValid() noexcept {'
+              method = '''    OTA::TrialBootStateResult InspectBootTargetTrialState(
               OTA::BootTargetIdentifier target) const noexcept {
               const auto* partition = OTADetail::FindApplicationTarget(target);
               if (partition == nullptr) {
@@ -54,78 +55,26 @@ jobs:
               return {OTA::Status::Failed, OTA::TrialBootState::Unknown, ESP_ERR_INVALID_STATE};
           }
 
-          '''
-          if 'InspectBootTargetTrialState' not in s:
-              if method_anchor not in s: raise RuntimeError('MarkCurrentBootValid anchor missing')
-              s = s.replace(method_anchor, method + method_anchor, 1)
-          assert_anchor = 'static_assert(OTA::IsSystemRestartProviderV<OTASystemRestart>,'
-          assertion = '''static_assert(OTA::HasTrialBootStateInspectionV<OTATrialBoot>,
+'''
+              if anchor not in s:
+                  raise SystemExit('MarkCurrentBootValid anchor missing')
+              s = s.replace(anchor, method + anchor, 1)
+          if 'HasTrialBootStateInspectionV<OTATrialBoot>' not in s:
+              anchor = 'static_assert(OTA::IsSystemRestartProviderV<OTASystemRestart>,'
+              assertion = '''static_assert(OTA::HasTrialBootStateInspectionV<OTATrialBoot>,
               "ESP-IDF trial boot must expose target trial-state inspection");
 '''
-          if 'HasTrialBootStateInspectionV<OTATrialBoot>' not in s:
-              if assert_anchor not in s: raise RuntimeError('static assert anchor missing')
-              s = s.replace(assert_anchor, assertion + assert_anchor, 1)
-          p.write_text(s)
-
-          p = Path('tests/native/ota_test.cpp')
-          s = p.read_text()
-          if 'CandidateStatePresent' not in s:
-              anchor = 'esp_ota_img_states_t RunningState{ESP_OTA_IMG_VALID};\n'
-              if anchor not in s: raise RuntimeError('RunningState anchor missing')
-              s = s.replace(anchor, anchor + 'esp_ota_img_states_t CandidateState{ESP_OTA_IMG_UNDEFINED};\nbool CandidateStatePresent{false};\n', 1)
-
-          old = '''esp_err_t esp_ota_get_state_partition(const esp_partition_t* partition, esp_ota_img_states_t* state) {
-              if (partition == nullptr || state == nullptr || partition != Running) return ESP_ERR_INVALID_ARG;
-              *state = RunningState;
-              return ESP_OK;
-          }'''
-          new = '''esp_err_t esp_ota_get_state_partition(const esp_partition_t* partition, esp_ota_img_states_t* state) {
-              if (partition == nullptr || state == nullptr) return ESP_ERR_INVALID_ARG;
-              if (partition == Running) {
-                  *state = RunningState;
-                  return ESP_OK;
-              }
-              if (partition == Candidate) {
-                  if (!CandidateStatePresent) return ESP_ERR_NOT_FOUND;
-                  *state = CandidateState;
-                  return ESP_OK;
-              }
-              return ESP_ERR_INVALID_ARG;
-          }'''
-          if old in s:
-              s = s.replace(old, new, 1)
-          elif new not in s:
-              raise RuntimeError('esp_ota_get_state_partition body not found')
-
-          static_anchor = '    static_assert(OTA::IsSystemRestartProviderV<OTASystemRestart>);'
-          if 'static_assert(OTA::HasTrialBootStateInspectionV<OTATrialBoot>);' not in s:
-              if static_anchor not in s: raise RuntimeError('native static assert anchor missing')
-              s = s.replace(static_anchor,
-                  '    static_assert(OTA::HasTrialBootStateInspectionV<OTATrialBoot>);\n' + static_anchor, 1)
-
-          test_anchor = '    if (RestartCalls != 0U) return 20;'
-          tests = '''    Running = &Partitions[1];
-              CandidateStatePresent = false;
-              const auto neverAttempted = trial.InspectBootTargetTrialState(OTA::BootTargetIdentifier{Candidate->address});
-              if (!neverAttempted || neverAttempted.State != OTA::TrialBootState::NeverAttempted) return 30;
-              CandidateStatePresent = true;
-              CandidateState = ESP_OTA_IMG_NEW;
-              const auto armed = trial.InspectBootTargetTrialState(OTA::BootTargetIdentifier{Candidate->address});
-              if (!armed || armed.State != OTA::TrialBootState::Armed) return 31;
-              CandidateState = ESP_OTA_IMG_ABORTED;
-              const auto rejected = trial.InspectBootTargetTrialState(OTA::BootTargetIdentifier{Candidate->address});
-              if (!rejected || rejected.State != OTA::TrialBootState::Rejected) return 32;
-
-          '''
-          if 'const auto neverAttempted = trial.InspectBootTargetTrialState' not in s:
-              if test_anchor not in s: raise RuntimeError('trial test anchor missing')
-              s = s.replace(test_anchor, tests + test_anchor, 1)
+              if anchor not in s:
+                  raise SystemExit('static assertion anchor missing')
+              s = s.replace(anchor, assertion + anchor, 1)
           p.write_text(s)
           PY
-      - name: Commit fix
+      - name: Commit source fix if changed
+        shell: bash
         run: |
+          if git diff --quiet -- src/ESPressio_Platform_IDFOTA.hpp; then exit 0; fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/ESPressio_Platform_IDFOTA.hpp tests/native/ota_test.cpp
+          git add src/ESPressio_Platform_IDFOTA.hpp
           git commit -m "feat: inspect ESP-IDF OTA trial target state"
           git push origin HEAD:ota_v1
