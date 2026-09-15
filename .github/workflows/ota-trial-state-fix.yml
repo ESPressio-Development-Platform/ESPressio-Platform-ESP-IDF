@@ -22,73 +22,63 @@ jobs:
 
           p = Path('src/ESPressio_Platform_IDFOTA.hpp')
           s = p.read_text()
-          marker = '''    bool IsCurrentBootTrial() const noexcept {
-              const auto* running = esp_ota_get_running_partition();
-              if (running == nullptr) return false;
-              esp_ota_img_states_t state{};
-              if (esp_ota_get_state_partition(running, &state) != ESP_OK) return false;
-              return state == ESP_OTA_IMG_PENDING_VERIFY;
-          }
-          '''
-          replacement = marker + '''
-              OTA::TrialBootStateResult InspectBootTargetTrialState(
-                  OTA::BootTargetIdentifier target) const noexcept {
-                  const auto* partition = OTADetail::FindApplicationTarget(target);
-                  if (partition == nullptr) {
-                      return {OTA::Status::Invalid, OTA::TrialBootState::Unknown, ESP_ERR_NOT_FOUND};
-                  }
-                  esp_ota_img_states_t state{};
-                  const auto result = esp_ota_get_state_partition(partition, &state);
-                  if (result == ESP_ERR_NOT_FOUND) {
-                      return {OTA::Status::Success, OTA::TrialBootState::NeverAttempted, 0};
-                  }
-                  if (result != ESP_OK) {
-                      const auto mapped = OTADetail::MapResult(result);
-                      return {mapped.Code, OTA::TrialBootState::Unknown, mapped.NativeCode};
-                  }
-                  switch (state) {
-                      case ESP_OTA_IMG_NEW:
-                          return {OTA::Status::Success, OTA::TrialBootState::Armed, 0};
-                      case ESP_OTA_IMG_PENDING_VERIFY:
-                          return {OTA::Status::Success, OTA::TrialBootState::PendingValidation, 0};
-                      case ESP_OTA_IMG_VALID:
-                          return {OTA::Status::Success, OTA::TrialBootState::Accepted, 0};
-                      case ESP_OTA_IMG_INVALID:
-                      case ESP_OTA_IMG_ABORTED:
-                          return {OTA::Status::Success, OTA::TrialBootState::Rejected, 0};
-                      case ESP_OTA_IMG_UNDEFINED:
-                          return {OTA::Status::Success, OTA::TrialBootState::Untracked, 0};
-                  }
-                  return {OTA::Status::Failed, OTA::TrialBootState::Unknown, ESP_ERR_INVALID_STATE};
+          method_anchor = '    OTA::Result MarkCurrentBootValid() noexcept {'
+          method = '''    OTA::TrialBootStateResult InspectBootTargetTrialState(
+              OTA::BootTargetIdentifier target) const noexcept {
+              const auto* partition = OTADetail::FindApplicationTarget(target);
+              if (partition == nullptr) {
+                  return {OTA::Status::Invalid, OTA::TrialBootState::Unknown, ESP_ERR_NOT_FOUND};
               }
+              esp_ota_img_states_t state{};
+              const auto result = esp_ota_get_state_partition(partition, &state);
+              if (result == ESP_ERR_NOT_FOUND) {
+                  return {OTA::Status::Success, OTA::TrialBootState::NeverAttempted, 0};
+              }
+              if (result != ESP_OK) {
+                  const auto mapped = OTADetail::MapResult(result);
+                  return {mapped.Code, OTA::TrialBootState::Unknown, mapped.NativeCode};
+              }
+              switch (state) {
+                  case ESP_OTA_IMG_NEW:
+                      return {OTA::Status::Success, OTA::TrialBootState::Armed, 0};
+                  case ESP_OTA_IMG_PENDING_VERIFY:
+                      return {OTA::Status::Success, OTA::TrialBootState::PendingValidation, 0};
+                  case ESP_OTA_IMG_VALID:
+                      return {OTA::Status::Success, OTA::TrialBootState::Accepted, 0};
+                  case ESP_OTA_IMG_INVALID:
+                  case ESP_OTA_IMG_ABORTED:
+                      return {OTA::Status::Success, OTA::TrialBootState::Rejected, 0};
+                  case ESP_OTA_IMG_UNDEFINED:
+                      return {OTA::Status::Success, OTA::TrialBootState::Untracked, 0};
+              }
+              return {OTA::Status::Failed, OTA::TrialBootState::Unknown, ESP_ERR_INVALID_STATE};
+          }
+
           '''
-          assert s.count(marker) == 1
-          s = s.replace(marker, replacement, 1)
-          marker = '''static_assert(OTA::IsTrialBootProviderV<OTATrialBoot>,
-                        "ESP-IDF trial boot must satisfy the portable OTA contract");
-          '''
-          replacement = marker + '''static_assert(OTA::HasTrialBootStateInspectionV<OTATrialBoot>,
-                        "ESP-IDF trial boot must expose target trial-state inspection");
-          '''
-          assert s.count(marker) == 1
-          s = s.replace(marker, replacement, 1)
+          if 'InspectBootTargetTrialState' not in s:
+              if method_anchor not in s: raise RuntimeError('MarkCurrentBootValid anchor missing')
+              s = s.replace(method_anchor, method + method_anchor, 1)
+          assert_anchor = 'static_assert(OTA::IsSystemRestartProviderV<OTASystemRestart>,'
+          assertion = '''static_assert(OTA::HasTrialBootStateInspectionV<OTATrialBoot>,
+              "ESP-IDF trial boot must expose target trial-state inspection");
+'''
+          if 'HasTrialBootStateInspectionV<OTATrialBoot>' not in s:
+              if assert_anchor not in s: raise RuntimeError('static assert anchor missing')
+              s = s.replace(assert_anchor, assertion + assert_anchor, 1)
           p.write_text(s)
 
           p = Path('tests/native/ota_test.cpp')
           s = p.read_text()
-          marker = '''esp_ota_img_states_t RunningState{ESP_OTA_IMG_VALID};
-          '''
-          replacement = marker + '''esp_ota_img_states_t CandidateState{ESP_OTA_IMG_UNDEFINED};
-          bool CandidateStatePresent{false};
-          '''
-          assert s.count(marker) == 1
-          s = s.replace(marker, replacement, 1)
+          if 'CandidateStatePresent' not in s:
+              anchor = 'esp_ota_img_states_t RunningState{ESP_OTA_IMG_VALID};\n'
+              if anchor not in s: raise RuntimeError('RunningState anchor missing')
+              s = s.replace(anchor, anchor + 'esp_ota_img_states_t CandidateState{ESP_OTA_IMG_UNDEFINED};\nbool CandidateStatePresent{false};\n', 1)
+
           old = '''esp_err_t esp_ota_get_state_partition(const esp_partition_t* partition, esp_ota_img_states_t* state) {
               if (partition == nullptr || state == nullptr || partition != Running) return ESP_ERR_INVALID_ARG;
               *state = RunningState;
               return ESP_OK;
-          }
-          '''
+          }'''
           new = '''esp_err_t esp_ota_get_state_partition(const esp_partition_t* partition, esp_ota_img_states_t* state) {
               if (partition == nullptr || state == nullptr) return ESP_ERR_INVALID_ARG;
               if (partition == Running) {
@@ -101,39 +91,35 @@ jobs:
                   return ESP_OK;
               }
               return ESP_ERR_INVALID_ARG;
-          }
-          '''
-          assert s.count(old) == 1
-          s = s.replace(old, new, 1)
-          marker = '''    static_assert(OTA::IsTrialBootProviderV<OTATrialBoot>);
-          '''
-          replacement = marker + '''    static_assert(OTA::HasTrialBootStateInspectionV<OTATrialBoot>);
-          '''
-          assert s.count(marker) == 1
-          s = s.replace(marker, replacement, 1)
-          marker = '''    if (!trial.MarkCurrentBootInvalid() || RunningState != ESP_OTA_IMG_INVALID || MarkInvalidCalls != 1U) return 19;
-              if (RestartCalls != 0U) return 20;
-          '''
-          replacement = '''    if (!trial.MarkCurrentBootInvalid() || RunningState != ESP_OTA_IMG_INVALID || MarkInvalidCalls != 1U) return 19;
-              Running = &Partitions[1];
+          }'''
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise RuntimeError('esp_ota_get_state_partition body not found')
+
+          static_anchor = '    static_assert(OTA::IsSystemRestartProviderV<OTASystemRestart>);'
+          if 'static_assert(OTA::HasTrialBootStateInspectionV<OTATrialBoot>);' not in s:
+              if static_anchor not in s: raise RuntimeError('native static assert anchor missing')
+              s = s.replace(static_anchor,
+                  '    static_assert(OTA::HasTrialBootStateInspectionV<OTATrialBoot>);\n' + static_anchor, 1)
+
+          test_anchor = '    if (RestartCalls != 0U) return 20;'
+          tests = '''    Running = &Partitions[1];
               CandidateStatePresent = false;
               const auto neverAttempted = trial.InspectBootTargetTrialState(OTA::BootTargetIdentifier{Candidate->address});
-              if (!neverAttempted || neverAttempted.State != OTA::TrialBootState::NeverAttempted) return 20;
+              if (!neverAttempted || neverAttempted.State != OTA::TrialBootState::NeverAttempted) return 30;
               CandidateStatePresent = true;
               CandidateState = ESP_OTA_IMG_NEW;
               const auto armed = trial.InspectBootTargetTrialState(OTA::BootTargetIdentifier{Candidate->address});
-              if (!armed || armed.State != OTA::TrialBootState::Armed) return 21;
+              if (!armed || armed.State != OTA::TrialBootState::Armed) return 31;
               CandidateState = ESP_OTA_IMG_ABORTED;
               const auto rejected = trial.InspectBootTargetTrialState(OTA::BootTargetIdentifier{Candidate->address});
-              if (!rejected || rejected.State != OTA::TrialBootState::Rejected) return 22;
-              if (RestartCalls != 0U) return 23;
+              if (!rejected || rejected.State != OTA::TrialBootState::Rejected) return 32;
+
           '''
-          assert s.count(marker) == 1
-          s = s.replace(marker, replacement, 1)
-          s = s.replace('return 21;\n\n    OTAStorageLayoutInspection', 'return 24;\n\n    OTAStorageLayoutInspection', 1)
-          s = s.replace('return 22;\n    if (!first.Layout', 'return 25;\n    if (!first.Layout', 1)
-          s = s.replace('return 23;\n    const std::uint64_t expectedTotal', 'return 26;\n    const std::uint64_t expectedTotal', 1)
-          s = s.replace('return 24;\n\n    return 0;', 'return 27;\n\n    return 0;', 1)
+          if 'const auto neverAttempted = trial.InspectBootTargetTrialState' not in s:
+              if test_anchor not in s: raise RuntimeError('trial test anchor missing')
+              s = s.replace(test_anchor, tests + test_anchor, 1)
           p.write_text(s)
           PY
       - name: Commit fix
