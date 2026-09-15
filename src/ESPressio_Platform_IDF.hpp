@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ESPressio_Platform.hpp"
+#include "ESPressio_PlatformCapabilities.hpp"
 
 namespace ESPressio::Platform::IDF {
 
